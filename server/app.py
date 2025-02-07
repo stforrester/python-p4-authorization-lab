@@ -30,7 +30,7 @@ class ClearSession(Resource):
 class IndexArticle(Resource):
     
     def get(self):
-        articles = [article.to_dict() for article in Article.query.all()]
+        articles = [article.to_dict() for article in Article.query.filter_by(is_member_only = False).all()]
         return make_response(jsonify(articles), 200)
 
 class ShowArticle(Resource):
@@ -40,16 +40,20 @@ class ShowArticle(Resource):
         article = Article.query.filter(Article.id == id).first()
         article_json = article.to_dict()
 
-        if not session.get('user_id'):
-            session['page_views'] = 0 if not session.get('page_views') else session.get('page_views')
-            session['page_views'] += 1
+        if article.is_member_only == False:
 
-            if session['page_views'] <= 3:
-                return article_json, 200
+            if not session.get('user_id'):
+                session['page_views'] = 0 if not session.get('page_views') else session.get('page_views')
+                session['page_views'] += 1
 
-            return {'message': 'Maximum pageview limit reached'}, 401
+                if session['page_views'] <= 3:
+                    return article_json, 200
 
-        return article_json, 200
+                return {'message': 'Maximum pageview limit reached'}, 401
+
+            return article_json, 200
+    
+        return {'message': 'Unathorized - article requested is only availabe to registered members.'}, 401
 
 class Login(Resource):
 
@@ -86,13 +90,29 @@ class CheckSession(Resource):
 
 class MemberOnlyIndex(Resource):
     
-    def get(self):
-        pass
+   def get(self):
+        
+        user_id = session['user_id']
+        if user_id:
+            articles = [article.to_dict() for article in Article.query.filter_by(is_member_only = True).all()]
+            return make_response(jsonify(articles), 200)
+        
+        return {}, 401
 
 class MemberOnlyArticle(Resource):
     
     def get(self, id):
-        pass
+
+        article = Article.query.filter(Article.id == id).first()
+        article_json = article.to_dict()
+        
+        if article.is_member_only == True and session.get('user_id'):
+            return article_json, 200
+
+        elif article.is_member_only == True and not session.get('user_id'):
+            return {'message': 'Unathorized - article requested is only availabe to registered members.'}, 401
+
+        return article_json, 200
 
 api.add_resource(ClearSession, '/clear', endpoint='clear')
 api.add_resource(IndexArticle, '/articles', endpoint='article_list')
